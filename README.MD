@@ -9,14 +9,17 @@ This library is a slimmed down version of https://github.com/onur/acme-client in
 ```
 fn main() -> Result<()> {
     let dir = Directory::lets_encrypt()?;
+
     let account = dir.account_registration()
         .pkey_from_file(path) // optional, will create a key or provide one with pkey()
         .register()?;
-    let order = account
-        .create_order("test.autobuild.cloud").unwrap();
+
 
     let domain = "yourdomain.com";
     let domains = &[domain];
+    
+    let order = account
+        .create_order(&domain).unwrap();
 
     for chal in order.challenges.clone() {
         if chal.ctype == "dns-01" {
@@ -40,4 +43,5 @@ fn main() -> Result<()> {
 - Housecleaning
 - Async support
 - Update libraries
+- Examples
 
