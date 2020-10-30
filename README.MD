@@ -38,6 +38,7 @@ fn main() -> Result<()> {
 
 ## TODO
 
+- Implement all certificate management features 
 - Better ergonomics
 - More logging
 - Housecleaning

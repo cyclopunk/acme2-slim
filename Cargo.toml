@@ -1,5 +1,5 @@
 [package]
-name = "acmev2-slim"
+name = "acme2-slim"
 description = "AcmeV2 Support, based on acme-client crate by Onur Aslan"
 version = "0.1.0"
 authors = ["Onur Aslan <onur@onur.im>","Adam Shaw <discourse@gmail.com>"]
