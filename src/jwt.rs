@@ -147,7 +147,7 @@ use super::*;
         assert!(!dir.get_nonce().unwrap().is_empty());
 
         let pkey = gen_key().unwrap();
-        let account = dir.account_registration().register()?;
+        let account = dir.account_registration().pkey_from_file(path)?.register()?;
 
         assert!(Jws::new(&account.directory.resources.newAccount,&account, "").is_ok());
         Ok(())
