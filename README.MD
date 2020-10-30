@@ -35,7 +35,7 @@ fn main() -> Result<()> {
 
 ## TODO
 
-- Better egonomics
+- Better ergonomics
 - More logging
 - Housecleaning
 - Async support
