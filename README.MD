@@ -7,27 +7,30 @@ This library is a slimmed down version of https://github.com/onur/acme-client in
 ## Quickstart
 
 ```
-let account = dir.account_registration()
-    .pkey_from_file(path) // optional, will create a key or provide one with pkey()
-    .register()?;
-let order = account
-    .create_order("test.autobuild.cloud").unwrap();
+fn main() -> Result<()> {
+    let dir = Directory::lets_encrypt()?;
+    let account = dir.account_registration()
+        .pkey_from_file(path) // optional, will create a key or provide one with pkey()
+        .register()?;
+    let order = account
+        .create_order("test.autobuild.cloud").unwrap();
 
-let domain = "yourdomain.com";
-let domains = &[domain];
+    let domain = "yourdomain.com";
+    let domains = &[domain];
 
-for chal in order.challenges.clone() {
-    if chal.ctype == "dns-01" {
-        chal.validate(&account).unwrap();
+    for chal in order.challenges.clone() {
+        if chal.ctype == "dns-01" {
+            chal.validate(&account).unwrap();
+        }
     }
+
+    let signer = account.certificate_signer(&domains);
+
+    let cert = signer.sign_certificate(&order).unwrap();
+
+    cert.save_signed_certificate(format!("certs/{}.pem", domain_name))?;
+    cert.save_private_key(format!("certs/{}.key", domain_name))?;
 }
-
-let signer = account.certificate_signer(&domains);
-
-let cert = signer.sign_certificate(&order).unwrap();
-
-cert.save_signed_certificate(format!("certs/{}.pem", domain_name))?;
-cert.save_private_key(format!("certs/{}.key", domain_name))?;
 ```
 
 ## TODO
@@ -35,4 +38,6 @@ cert.save_private_key(format!("certs/{}.key", domain_name))?;
 - Better egonomics
 - More logging
 - Housecleaning
+- Async support
+- Update libraries
 
