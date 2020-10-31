@@ -22,7 +22,7 @@ use openssl::pkey::PKey;
 use openssl::x509::{X509};
 
 use reqwest::{Client, StatusCode};
-use serde_json::{Value, from_str, to_string, to_value};
+use serde_json::{Value, to_string};
 use serde::{Serialize, Deserialize};
 use error::{Result, ErrorKind};
 
@@ -49,21 +49,23 @@ const BIT_LENGTH: u32 = 2048;
 }*/
 
 #[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 struct DirectoryMetadata {
-    caaIdentities: Vec<String>,
-    termsOfService: String,
+    caa_identities: Vec<String>,
+    terms_of_service: String,
     website:String,
     #[serde(flatten)]
     other: HashMap<String, Value>,
 }
 #[derive(Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
 struct DirectoryResources {
-    keyChange: String,
+    key_change: String,
     meta: DirectoryMetadata,
-    newAccount:String,
-    newNonce:String,
-    newOrder:String,
-    revokeCert:String,
+    new_account:String,
+    new_nonce:String,
+    new_order:String,
+    revoke_cert:String,
     #[serde(flatten)]
     other: HashMap<String, Value>,
 }
@@ -144,7 +146,7 @@ impl Directory {
   /// it will try to get nonce header from directory url.
   fn get_nonce(&self) -> Result<String> {
       let client = Client::new()?;
-      let res = client.get(&self.resources.newNonce).send()?;
+      let res = client.get(&self.resources.new_nonce).send()?;
       res.headers()
           .get::<ReplayNonce>()
           .ok_or("Replay-Nonce header not found".into())
@@ -245,11 +247,12 @@ struct FinalizeResponse {
 }
 
 impl CheckResponse {
+    /*
     pub fn get_dns_challenge(&self) -> Challenge {
         let matches: Vec<Challenge> = self.challenges.iter().cloned().filter(|p| p.ctype == "dns-01").collect();
         
         matches.first().unwrap().clone()
-    }
+    }*/
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -395,7 +398,7 @@ impl Account {
         let directory = self.directory().clone();
         
         let new_order: NewOrderResponse = directory
-            .request(self, &directory.resources.newOrder, req)?;
+            .request(self, &directory.resources.new_order, req)?;
                 
         for auth in new_order.authorizations {                 
             let mut resp: CheckResponse = directory
@@ -457,7 +460,7 @@ impl Account {
         let directory = self.directory().clone();
 
         let _response : RevokeResponse = directory
-            .request(self, &directory.resources.revokeCert, map)?;
+            .request(self, &directory.resources.revoke_cert, map)?;
 
         Ok(())
     }

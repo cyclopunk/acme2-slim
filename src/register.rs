@@ -17,14 +17,16 @@ pub struct AccountRegistration {
 }
 
 #[derive(Serialize,Clone, Default)]
+#[serde(rename_all = "camelCase")]
 struct RegisterRequest {
-    pub termsOfServiceAgreed: bool
+    pub terms_of_service_agreed: bool
 }
 #[derive(Deserialize,Clone)]
+#[serde(rename_all = "camelCase")]
 struct RegisterResult {
     contact: Vec<String>,
-    initialIp: String,
-    createdAt: String,
+    initial_ip: String,
+    created_at: String,
     status: String,
     #[serde(flatten)]
     key: HashMap<String,serde_json::Value>
@@ -34,8 +36,8 @@ impl Default for RegisterResult {
     fn default() -> Self {
         RegisterResult {
             contact: Vec::default(),
-            initialIp: String::default(),
-            createdAt: String::default(),
+            initial_ip: String::default(),
+            created_at: String::default(),
             status: String::default(),
             key: HashMap::default()
         }
@@ -89,10 +91,10 @@ impl AccountRegistration {
             pkey: pkey,
         };
 
-        let url = &self.directory.resources.newAccount.clone();
+        let url = &self.directory.resources.new_account.clone();
 
         let _result : RegisterResult  = self.directory.request(&mut account, &url, 
-             RegisterRequest{termsOfServiceAgreed: true})?;
+             RegisterRequest{terms_of_service_agreed: true})?;
 
         Ok(account)
     }
