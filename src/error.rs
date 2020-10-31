@@ -1,10 +1,4 @@
 
-use std::io;
-use openssl;
-use hyper;
-use reqwest;
-use serde_json;
-
 error_chain! {
     types {
         Error, ErrorKind, ChainErr, Result;
@@ -15,7 +9,7 @@ error_chain! {
 
     foreign_links {
         OpenSslErrorStack(openssl::error::ErrorStack);
-        IoError(io::Error);
+        IoError(std::io::Error);
         HyperError(hyper::Error);
         ReqwestError(reqwest::Error);
         ValueParserError(serde_json::Error);

@@ -1,10 +1,3 @@
-pub extern crate openssl;
-
-extern crate reqwest;
-extern crate serde;
-extern crate serde_json;
-extern crate base64;
-
 use std::{path::Path, io::stdin};
 use std::fs::File;
 use std::io::{Read, Write};

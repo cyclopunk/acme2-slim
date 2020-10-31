@@ -1,28 +1,37 @@
-
-use LETSENCRYPT_INTERMEDIATE_CERT_URL;
-use Write;
-use Jws;
-use b64;
-use helper::gen_key;
-use CreateOrderResponse;
+use crate::LETSENCRYPT_INTERMEDIATE_CERT_URL;
+use std::io::Write;
+use crate::FinalizeResponse;
+use reqwest::header::ContentType;
+use reqwest::Client;
+use openssl::x509::X509;
+use crate::{CreateOrderResponse, jwt::Jws};
+use std::path::Path;
+use openssl::{pkey::PKey, x509::X509Req};
+use log::{debug, info};
 use std::{fs::File, io::Read};
 
-use X509Req;
-use helper::read_pkey;
-use Path;
-use PKey;
-use CertificateSigner;
-use Client;
-use ContentType;
-use FinalizeResponse;
-use X509;
-use SignedCertificate;
 use serde_json::from_str;
-use crate::{error::{Result}, helper::gen_csr};
+use crate::{Account, error::{Result}, helper::*};
 use serde::{Serialize, Deserialize};
 #[derive(Serialize, Deserialize, Clone)]
 pub struct CsrRequest {
     csr: String
+}
+
+
+/// A signed certificate.
+pub struct SignedCertificate {
+    certs: Vec<X509>,
+    csr: X509Req,
+    pkey: PKey<openssl::pkey::Private>,
+}
+  
+
+pub struct CertificateSigner<'a> {
+    pub(crate) account: &'a Account,
+    pub(crate) domains: &'a [&'a str],
+    pub(crate) pkey: Option<PKey<openssl::pkey::Private>>,
+    pub(crate) csr: Option<X509Req>,
 }
 
 impl<'a> CertificateSigner<'a> {
@@ -68,9 +77,11 @@ impl<'a> CertificateSigner<'a> {
         info!("Signing certificate");
         let domains: Vec<&str> = order.domains.iter().map(|s| &s[..]).collect();
         let s_key = gen_key().unwrap();
-        let csr = gen_csr(&s_key, &domains).unwrap();
+        let csr = gen_csr(&s_key, &domains)?;
+        let payload = &csr.to_der()?;
+        
         let csr_payload = CsrRequest{ 
-            csr: b64(&csr.to_der()?).to_string() 
+            csr: b64(payload)
         };
         let client = Client::new().unwrap();
         

@@ -1,12 +1,12 @@
 use std::{collections::HashMap, path::Path};
 
-use error::ErrorKind;
 use hyper::status::StatusCode;
+use log::info;
 use openssl::pkey::PKey;
 
 use crate::{Account, Directory};
 use crate::helper::*;
-use error::Result;
+use crate::error::{Result};
 use serde::{Deserialize,Serialize};
 pub struct AccountRegistration {
     pub directory: Directory,

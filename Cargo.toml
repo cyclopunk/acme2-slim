@@ -6,8 +6,8 @@ authors = ["Onur Aslan <onur@onur.im>","Adam Shaw <discourse@gmail.com>"]
 license = "MIT"
 keywords = ["letsencrypt", "acme"]
 readme = "README.md"
-documentation = "https://docs.rs/acmev2-slim"
 repository = "https://github.com/cyclopunk/acmev2-slim"
+edition = "2018"
 
 [dependencies]
 error-chain = "0.12"
@@ -21,7 +21,7 @@ reqwest ="0.6"
 openssl = "0.10"
 env_logger = { version = "0.8.1"}
 foreign-types = { version = "0.5.0" }
-openssl-sys = { version = "0.9.24" }
+openssl-sys = { version = "0.9.28" }
 
 [dev-dependencies]
 env_logger = "0.8.1"

@@ -1,23 +1,16 @@
-pub extern crate openssl;
-#[macro_use]
-extern crate log;
 #[macro_use]
 extern crate error_chain;
-#[macro_use]
-extern crate hyper;
-extern crate reqwest;
-extern crate serde;
-extern crate serde_json;
-extern crate base64;
 
-
-use jwt::Jwk;
-use helper::b64;
+use crate::cert::CertificateSigner;
+use crate::hyperx::ReplayNonce;
+use crate::helper::get_raw;
+use jwt::{Jwk, Jws};
+use helper::*;
+use log::{debug, info};
 use serde_json::Map;
 use register::AccountRegistration;
 use reqwest::header::Location;
 use hyper::header::ContentType;
-use jwt::Jws;
 use std::{path::Path, io::stdin};
 use std::fs::File;
 use std::io::{Read, Write};
@@ -33,6 +26,13 @@ use serde_json::{Value, from_str, to_string, to_value};
 use serde::{Serialize, Deserialize};
 use error::{Result, ErrorKind};
 
+mod jwt;
+mod cert;
+mod register;
+mod validate;
+mod helper;
+mod error;
+
 pub const LETSENCRYPT_DIRECTORY_URL: &'static str = "https://acme-v02.api.letsencrypt.org\
                                                      /directory";
 pub const LETSENCRYPT_AGREEMENT_URL: &'static str = "https://letsencrypt.org/documents/LE-SA-v1.2-\
@@ -43,12 +43,6 @@ pub const LETSENCRYPT_INTERMEDIATE_CERT_URL: &'static str = "https://letsencrypt
 /// Default bit lenght for RSA keys and `X509_REQ`
 const BIT_LENGTH: u32 = 2048;                                                     
       
-mod jwt;
-mod cert;
-mod register;
-mod validate;
-mod helper;
-mod error;
 
 /*pub mod prelude {
   pub use super::{Directory, Account, Challenge};
@@ -80,19 +74,10 @@ pub struct Directory {
     resources: DirectoryResources
 }
 
-fn get_raw(url : &str) -> Result<String> {
-    let client = Client::new()?;
-    
-    let mut res = client.get(url).send()?;
-    
-    let mut content = String::new();
-
-    res.read_to_string(&mut content)?;
-
-    Ok(content)
-}
+#[macro_use] extern crate hyper;
 
 mod hyperx {
+
     // ReplayNonce header for hyper
     header! { (ReplayNonce, "Replay-Nonce") => [String] }
 }
@@ -118,7 +103,7 @@ impl Directory {
   /// # fn main () { try_main().unwrap(); }
   /// ```
   pub fn from_url(url: &str) -> Result<Directory> {    
-      let raw = get_raw(url)?; 
+      let raw = &get_raw(url)?[..]; 
       
       Ok(Directory {
              url: url.to_owned(),
@@ -161,7 +146,7 @@ impl Directory {
       let client = Client::new()?;
       let res = client.get(&self.resources.newNonce).send()?;
       res.headers()
-          .get::<hyperx::ReplayNonce>()
+          .get::<ReplayNonce>()
           .ok_or("Replay-Nonce header not found".into())
           .and_then(|nonce| Ok(nonce.as_str().to_string()))
   }
@@ -221,22 +206,6 @@ pub struct Challenge {
     status: String,
     #[serde(skip)]
     key_authorization: String
-}
-
-/// Helper to sign a certificate.
-pub struct CertificateSigner<'a> {
-  account: &'a Account,
-  domains: &'a [&'a str],
-  pkey: Option<PKey<openssl::pkey::Private>>,
-  csr: Option<X509Req>,
-}
-
-
-/// A signed certificate.
-pub struct SignedCertificate {
-  certs: Vec<X509>,
-  csr: X509Req,
-  pkey: PKey<openssl::pkey::Private>,
 }
 
 

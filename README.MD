@@ -4,6 +4,21 @@
 
 This library is a slimmed down version of https://github.com/onur/acme-client into only a rust api and it also supports the Acmev2 protocol. It is currently a work in progress, but you should be able to use it to create certificates.
 
+## Development
+
+To compile on windows you will need openssl, here's an easy way to get it installed.
+
+(example in Git Bash)
+```
+git clone https://github.com/microsoft/vcpkg
+cd vcpkg
+./bootstrap-vcpkg.sh
+./vcpkg.exe install openssl
+./vcpkg.exe install openssl:x86-windows-static
+# Add OPENSSL_DIR=/vcpkg/path/installed/x86-windows-static
+cargo build
+```
+
 ## Quickstart
 
 ```

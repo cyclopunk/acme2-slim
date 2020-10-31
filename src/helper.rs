@@ -1,17 +1,30 @@
+use reqwest::Client;
 use std::path::Path;
 use std::fs::File;
 use std::io::Read;
 
-use openssl;
-use openssl::pkey::PKey;
-use openssl::rsa::Rsa;
+use openssl::{pkey::PKey, rsa::Rsa};
 use openssl::x509::{X509Req, X509Name};
 use openssl::x509::extension::SubjectAlternativeName;
 use openssl::stack::Stack;
 use openssl::hash::MessageDigest;
-use error::{Result, ErrorKind};
+
+use crate::error::{Result};
+
+pub(crate) fn get_raw(url : &str) -> Result<String> {
+    let client = Client::new()?;
+    
+    let mut res = client.get(url).send()?;
+    
+    let mut content = String::new();
+
+    res.read_to_string(&mut content)?;
+
+    Ok(content)
+}
+
 /// Generates new PKey.
-pub fn gen_key() -> Result<PKey<openssl::pkey::Private>> {
+pub(crate) fn gen_key() -> Result<PKey<openssl::pkey::Private>> {
     let rsa = Rsa::generate(super::BIT_LENGTH)?;
     let key = PKey::from_rsa(rsa)?;
     Ok(key)
@@ -19,13 +32,13 @@ pub fn gen_key() -> Result<PKey<openssl::pkey::Private>> {
 
 
 /// base64 Encoding with URL and Filename Safe Alphabet.
-pub fn b64(data: &[u8]) -> String {
+pub(crate) fn b64(data: &[u8]) -> String {
     ::base64::encode_config(data, ::base64::URL_SAFE_NO_PAD)
 }
 
 
 /// Reads PKey from Path.
-pub fn read_pkey<P: AsRef<Path>>(path: P) -> Result<PKey<openssl::pkey::Private>> {
+pub(crate) fn read_pkey<P: AsRef<Path>>(path: P) -> Result<PKey<openssl::pkey::Private>> {
     let mut file = File::open(path)?;
     let mut content = Vec::new();
     file.read_to_end(&mut content)?;
@@ -40,7 +53,7 @@ pub fn read_pkey<P: AsRef<Path>>(path: P) -> Result<PKey<openssl::pkey::Private>
 /// This function will generate a CSR and sign it with PKey.
 ///
 /// Returns X509Req and PKey used to sign X509Req.
-pub fn gen_csr(pkey: &PKey<openssl::pkey::Private>, domains: &[&str]) -> Result<X509Req> {
+pub(crate) fn gen_csr(pkey: &PKey<openssl::pkey::Private>, domains: &[&str]) -> Result<X509Req> {
     if domains.is_empty() {
         return Err("You need to supply at least one or more domain names".into());
     }
