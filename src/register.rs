@@ -1,6 +1,6 @@
 use std::{collections::HashMap, path::Path};
 
-use hyper::status::StatusCode;
+
 use log::info;
 use openssl::pkey::PKey;
 
@@ -91,7 +91,7 @@ impl AccountRegistration {
 
         let url = &self.directory.resources.newAccount.clone();
 
-        let result : RegisterResult  = self.directory.request(&mut account, &url, 
+        let _result : RegisterResult  = self.directory.request(&mut account, &url, 
              RegisterRequest{termsOfServiceAgreed: true})?;
 
         Ok(account)

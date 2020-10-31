@@ -1,14 +1,14 @@
-use std::{path::Path, io::stdin};
-use std::fs::File;
-use std::io::{Read, Write};
-use std::collections::HashMap;
+
+
+
+
 
 use openssl::sign::Signer;
-use openssl::hash::{hash, MessageDigest};
+use openssl::hash::{MessageDigest};
 use openssl::pkey::PKey;
-use openssl::x509::{X509, X509Req};
 
-use reqwest::{Client, StatusCode};
+
+
 
 use crate::{Account, Directory, helper::{gen_key, b64, read_pkey, gen_csr}};
 
@@ -16,7 +16,7 @@ use serde_json::{Value, from_str, to_string, to_value};
 use serde::{Serialize, Deserialize};
 
 
-use crate::error::{Result, ErrorKind};
+use crate::error::{Result};
 
 
 #[derive(Serialize, Deserialize, Clone, Default)]
@@ -64,7 +64,7 @@ struct EncodedJws {
 
 impl <T> Jws <T> where T : Serialize {
     pub(crate) fn serialize(&self, account: &Account) -> Result<String> {
-        let nonce = account.directory.get_nonce()?;
+        let _nonce = account.directory.get_nonce()?;
 
         //data.insert("header".to_owned(), to_value(&header)?);
 
@@ -140,7 +140,7 @@ use super::*;
         assert!(!dir.get_nonce().unwrap().is_empty());
 
         let pkey = gen_key().unwrap();
-        let account = dir.account_registration().pkey_from_file(path)?.register()?;
+        let account = dir.account_registration().register()?;
 
         assert!(Jws::new(&account.directory.resources.newAccount,&account, "").is_ok());
         Ok(())

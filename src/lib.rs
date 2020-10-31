@@ -7,19 +7,19 @@ use crate::helper::get_raw;
 use jwt::{Jwk, Jws};
 use helper::*;
 use log::{debug, info};
-use serde_json::Map;
+
 use register::AccountRegistration;
 use reqwest::header::Location;
 use hyper::header::ContentType;
-use std::{path::Path, io::stdin};
+use std::{path::Path};
 use std::fs::File;
 use std::io::{Read, Write};
 use std::collections::HashMap;
 
-use openssl::sign::Signer;
+
 use openssl::hash::{hash, MessageDigest};
 use openssl::pkey::PKey;
-use openssl::x509::{X509, X509Req};
+use openssl::x509::{X509};
 
 use reqwest::{Client, StatusCode};
 use serde_json::{Value, from_str, to_string, to_value};
@@ -270,7 +270,7 @@ impl Challenge {
         debug!("Saving validation token into: {:?}", &path);
         create_dir_all(&path)?;
 
-        let mut file = File::create(path.join(&self.token))?;
+        let _file = File::create(path.join(&self.token))?;
         //writeln!(&mut file, "{}", self.key_authorization)?;
 
         Ok(())
@@ -456,7 +456,7 @@ impl Account {
         map.insert("certificate".to_owned(), b64(&cert.to_der()?));
         let directory = self.directory().clone();
 
-        let response : RevokeResponse = directory
+        let _response : RevokeResponse = directory
             .request(self, &directory.resources.revokeCert, map)?;
 
         Ok(())
