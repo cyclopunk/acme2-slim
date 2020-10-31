@@ -10,9 +10,9 @@ use openssl::pkey::PKey;
 
 
 
-use crate::{Account, Directory, helper::{gen_key, b64, read_pkey, gen_csr}};
+use crate::{Account, helper::{ b64 }};
 
-use serde_json::{Value, from_str, to_string, to_value};
+use serde_json::{ to_string };
 use serde::{Serialize, Deserialize};
 
 
@@ -117,8 +117,11 @@ impl <T> Jws <T> where T : Serialize {
 #[cfg(test)]
 pub mod tests {
     extern crate env_logger;
-    use Directory;
-use super::*;
+    use crate::Jws;
+use crate::Account;
+use crate::Directory;
+use crate::gen_key;
+use crate::error::*;
 
     const LETSENCRYPT_STAGING_DIRECTORY_URL: &'static str = "https://acme-staging-v02.api.letsencrypt.org/directory";
 
