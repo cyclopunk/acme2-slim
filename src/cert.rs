@@ -1,7 +1,8 @@
+use hyper::client::Request;
 use crate::LETSENCRYPT_INTERMEDIATE_CERT_URL;
 use std::io::Write;
 use crate::FinalizeResponse;
-use reqwest::header::ContentType;
+use reqwest::{header::ContentType, Response};
 use reqwest::Client;
 use openssl::x509::X509;
 use crate::{CreateOrderResponse, jwt::Jws};
@@ -18,7 +19,6 @@ pub struct CsrRequest {
     csr: String
 }
 
-
 /// A signed certificate.
 pub struct SignedCertificate {
     certs: Vec<X509>,
@@ -29,7 +29,6 @@ pub struct SignedCertificate {
 
 pub struct CertificateSigner<'a> {
     pub(crate) account: &'a Account,
-    pub(crate) domains: &'a [&'a str],
     pub(crate) pkey: Option<PKey<openssl::pkey::Private>>,
     pub(crate) csr: Option<X509Req>,
 }
@@ -76,6 +75,7 @@ impl<'a> CertificateSigner<'a> {
     pub fn sign_certificate(self, order : &CreateOrderResponse) -> Result<SignedCertificate> {
         info!("Signing certificate");
         let domains: Vec<&str> = order.domains.iter().map(|s| &s[..]).collect();
+        
         let s_key = gen_key().unwrap();
         let csr = gen_csr(&s_key, &domains)?;
         let payload = &csr.to_der()?;
@@ -83,78 +83,62 @@ impl<'a> CertificateSigner<'a> {
         let csr_payload = CsrRequest{ 
             csr: b64(payload)
         };
+
         let client = Client::new().unwrap();
         
-        let mut resp = client
+        let resp = client
             .post(&order.finalize_url)
             .header(ContentType("application/jose+json".parse().unwrap()))
             .body({                        
-                Jws::new(&order.finalize_url,&self.account, csr_payload)?.serialize(&self.account)?
+                Jws::new(&order.finalize_url,&self.account, csr_payload)?.to_string()?
             })
             .send()?;
         
-        let fr : FinalizeResponse = {
-            let mut res_content = String::new();
-            resp.read_to_string(&mut res_content)?;
-            from_str(&res_content)?
-        };
-        
-        let mut cert_resp = client
-        .post(&fr.certificate)
-        .header(ContentType("application/jose+json".parse().unwrap()))
-        .body(                    
-            Jws::new(&fr.certificate,&self.account, "")?.serialize(self.account)?)
-        .send().unwrap();
-
-
-        let mut crt_der = String::new();
-        cert_resp.read_to_string(&mut crt_der)?;        
-
-        let cert = X509::stack_from_pem(&crt_der.as_bytes())?;
-
-        debug!("Certificate successfully signed");
-        
+        let finalize_response : FinalizeResponse = resp.into();
+    
         Ok(SignedCertificate {
-               certs: cert,
+               certs: finalize_response.get_certificates(&self.account)?,
                csr: csr,
                pkey: s_key,
            })
     }
 }
 
+impl FinalizeResponse {
+    fn get_certificates(&self, account : &Account) -> Result<Vec<X509>> {
+        let client = Client::new()?;
 
+        let mut cert_resp = client
+            .post(&self.certificate)
+            .header(ContentType("application/jose+json".parse().unwrap()))
+            .body(                    
+                Jws::new(&self.certificate, &account, "")?.to_string()?)
+            .send().unwrap();
+
+        let mut crt_der = String::new();
+
+        cert_resp.read_to_string(&mut crt_der)?;        
+
+        let cert = X509::stack_from_pem(&crt_der.as_bytes())?;
+
+        Ok(cert)
+    }
+}
+
+
+impl Into<FinalizeResponse> for Response {
+    fn into(mut self) -> FinalizeResponse { 
+        let mut res_content = String::new();
+        self.read_to_string(&mut res_content).unwrap();
+        from_str(&res_content).unwrap()
+    }
+}
 
 impl SignedCertificate {
     /// Saves signed certificate to a file
     pub fn save_signed_certificate<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         let mut file = File::create(path)?;
         self.write_signed_certificate(&mut file)
-    }
-
-    /// Saves intermediate certificate to a file
-    ///
-    /// You can additionally provide intermediate certificate url, by default it will use
-    /// [`LETSENCRYPT_INTERMEDIATE_CERT_URL`](constant.LETSENCRYPT_INTERMEDIATE_CERT_URL.html).
-    pub fn save_intermediate_certificate<P: AsRef<Path>>(&self,
-                                                         url: Option<&str>,
-                                                         path: P)
-                                                         -> Result<()> {
-        let mut file = File::create(path)?;
-        self.write_intermediate_certificate(url, &mut file)
-    }
-
-    /// Saves intermediate certificate and signed certificate to a file
-    ///
-    /// You can additionally provide intermediate certificate url, by default it will use
-    /// [`LETSENCRYPT_INTERMEDIATE_CERT_URL`](constant.LETSENCRYPT_INTERMEDIATE_CERT_URL.html).
-    pub fn save_signed_certificate_and_chain<P: AsRef<Path>>(&self,
-                                                             url: Option<&str>,
-                                                             path: P)
-                                                             -> Result<()> {
-        let mut file = File::create(path)?;
-        self.write_signed_certificate(&mut file)?;
-        self.write_intermediate_certificate(url, &mut file)?;
-        Ok(())
     }
 
     /// Saves private key used to sign certificate to a file
@@ -175,33 +159,6 @@ impl SignedCertificate {
             writer.write_all(&cert.to_pem()?)?;
         }
         Ok(())
-    }
-
-    /// Writes intermediate certificate to writer.
-    ///
-    /// You can additionally provide intermediate certificate url, by default it will use
-    /// [`LETSENCRYPT_INTERMEDIATE_CERT_URL`](constant.LETSENCRYPT_INTERMEDIATE_CERT_URL.html).
-    pub fn write_intermediate_certificate<W: Write>(&self,
-                                                    url: Option<&str>,
-                                                    writer: &mut W)
-                                                    -> Result<()> {
-        let cert = self.get_intermediate_certificate(url)?;
-        writer.write_all(&cert.to_pem()?)?;
-        Ok(())
-    }
-
-    /// Gets intermediate certificate from url.
-    ///
-    /// [`LETSENCRYPT_INTERMEDIATE_CERT_URL`](constant.LETSENCRYPT_INTERMEDIATE_CERT_URL.html).
-    /// will be used if url is None.
-    fn get_intermediate_certificate(&self, url: Option<&str>) -> Result<X509> {
-        let client = Client::new()?;
-        let mut res = client
-            .get(url.unwrap_or(LETSENCRYPT_INTERMEDIATE_CERT_URL))
-            .send()?;
-        let mut content = Vec::new();
-        res.read_to_end(&mut content)?;
-        Ok(X509::from_pem(&content)?)
     }
 
     /// Writes private key used to sign certificate to a writer

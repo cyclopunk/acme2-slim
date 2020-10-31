@@ -1,6 +1,8 @@
 #[macro_use]
 extern crate error_chain;
 
+use crate::challenge::CheckResponse;
+use crate::challenge::Challenge;
 use crate::cert::CertificateSigner;
 use crate::hyperx::ReplayNonce;
 use crate::helper::get_raw;
@@ -32,6 +34,7 @@ mod register;
 mod validate;
 mod helper;
 mod error;
+mod challenge;
 
 pub const LETSENCRYPT_DIRECTORY_URL: &'static str = "https://acme-v02.api.letsencrypt.org\
                                                      /directory";
@@ -140,10 +143,23 @@ impl Directory {
       }
   }
 
+  pub fn new_account_url(&self) -> String {
+    self.resources.new_account.clone()
+  }
+  pub fn new_order_url(&self) -> String {
+    self.resources.new_order.clone()
+  }
+  
+  pub fn new_noince_url(&self) -> String {
+    self.resources.new_nonce.clone()
+  }
+  
+  pub fn revoke_cert_url(&self) -> String {
+    self.resources.revoke_cert.clone()
+  }
+
   /// Gets nonce header from directory.
   ///
-  /// This function will try to look for `new-nonce` key in directory if it doesn't exists
-  /// it will try to get nonce header from directory url.
   fn get_nonce(&self) -> Result<String> {
       let client = Client::new()?;
       let res = client.get(&self.resources.new_nonce).send()?;
@@ -155,7 +171,7 @@ impl Directory {
 
   /// Makes a new post request to directory, signs payload with pkey.
   ///
-  /// Returns status code and Value object from reply.
+  /// Returns the result struct that is deserialized from the result
   fn request<'a, T: Serialize, E>(&self,
                            account:&mut Account,
                            url: &str,
@@ -169,7 +185,7 @@ impl Directory {
       let mut res = client
           .post(url)
           .header(ContentType("application/jose+json".parse().unwrap()))
-          .body(jws.serialize(account)?)
+          .body(jws.to_string()?)
           .send()?;
       
         let mut res_content = String::new();
@@ -192,31 +208,6 @@ pub struct Account {
     pkey_id: Option<String>
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
-/// A verification challenge.
-pub struct Challenge {
-    #[serde(skip)]
-    auth : Option<String>,
-    /// Type of verification challenge. Usually `http-01`, `dns-01` for letsencrypt.
-    #[serde(rename = "type")]
-    ctype: String,
-    /// URL to trigger challenge.
-    url: String,
-    /// Challenge token.
-    token: String,
-    /// Key authorization.
-    status: String,
-    #[serde(skip)]
-    key_authorization: String
-}
-
-
-/// Identifier authorization object.
-#[derive(Clone,Debug, Serialize, Deserialize)]
-pub struct Authorization {
-  url: String
-}
-
 #[derive(Clone,Debug, Serialize, Deserialize)]
 struct RevokeResponse {
     none: String
@@ -230,13 +221,6 @@ struct Identifier {
 }
 
 #[derive(Deserialize, Debug, Clone)]
-struct CheckResponse {
-    status: String,
-    expires: String,    
-    identifier: Identifier,
-    challenges: Vec<Challenge>
-}
-#[derive(Deserialize, Debug, Clone)]
 struct FinalizeResponse {
     status: String,
     finalize: String,
@@ -246,122 +230,6 @@ struct FinalizeResponse {
     identifiers: Vec<Identifier>
 }
 
-impl CheckResponse {
-    /*
-    pub fn get_dns_challenge(&self) -> Challenge {
-        let matches: Vec<Challenge> = self.challenges.iter().cloned().filter(|p| p.ctype == "dns-01").collect();
-        
-        matches.first().unwrap().clone()
-    }*/
-}
-
-#[derive(Serialize, Deserialize, Debug, Clone)]
-struct ValidatePayload {
-    #[serde(rename = "type")]
-    ctype: String,
-    token: String,
-    resource: String,
-    #[serde(rename = "keyAuthorization")]
-    key_authorization: String
-}
-
-impl Challenge {
-    /// Saves key authorization into `{path}/.well-known/acme-challenge/{token}` for http challenge.
-    pub fn save_key_authorization<P: AsRef<Path>>(&self, path: P) -> Result<()> {
-        use std::fs::create_dir_all;
-        let path = path.as_ref().join(".well-known").join("acme-challenge");
-        debug!("Saving validation token into: {:?}", &path);
-        create_dir_all(&path)?;
-
-        let _file = File::create(path.join(&self.token))?;
-        //writeln!(&mut file, "{}", self.key_authorization)?;
-
-        Ok(())
-    }
-
-    /// Gets DNS validation signature.
-    ///
-    /// This value is used for verification of domain over DNS. Signature must be saved
-    /// as a TXT record for `_acme_challenge.example.com`.
-    pub fn signature(&self) -> Result<String> {
-        Ok(b64(&hash(MessageDigest::sha256(),
-                     &self.key_authorization.clone().into_bytes())?))
-        
-    }
-
-    /// Returns challenge type, usually `http-01` or `dns-01` for Let's Encrypt.
-    pub fn ctype(&self) -> &str {
-        &self.ctype
-    }
-
-    /// Returns challenge token
-    pub fn token(&self) -> &str {
-        &self.token
-    }
-
-    /// Returns key_authorization
-    pub fn key_authorization(&self) -> &str {
-        &self.key_authorization
-    }
-
-    /// Triggers validation.
-    pub fn validate(&self, account: &Account) -> Result<()> {        
-        let payload = 
-            Jws::new(&self.url, account, ValidatePayload {
-                ctype: self.ctype.clone(),
-                token: self.token.clone(),
-                resource: "challenge".into(),
-                key_authorization: self.key_authorization().to_string()
-            })?;        
-
-        let client = Client::new()?;
-        let mut resp = client.post(&self.url)
-            .header(ContentType("application/jose+json".parse().unwrap()))
-            .body(payload.serialize(account)?).send()?;
-
-        let mut res_content = String::new();
-        
-        resp.read_to_string(&mut res_content)?;
-
-        let mut auth : Challenge = serde_json::from_str(&res_content[..]).unwrap();
-        auth.key_authorization = self.key_authorization().to_string();
-        
-        if resp.status() != &StatusCode::Accepted && resp.status() != &StatusCode::Ok {
-            return Err(ErrorKind::Msg("Unacceptable status when trying to validate".to_string()).into());
-        }
-
-        loop {
-            let status = &auth.status;
-
-            if status == "pending" {
-                let mut resp = client
-                    .post(&auth.url)
-                    .header(ContentType("application/jose+json".parse().unwrap()))
-                    .body({                        
-                        Jws::new(&auth.url,account, "")?.serialize(account)?
-                    })
-                    .send()?;
-
-                    let mut res_content = String::new();
-                    
-                    resp.read_to_string(&mut res_content)?;
-
-                    auth = serde_json::from_str(&res_content)?;
-
-            } else if status == "valid" {
-                
-                
-                return Ok(());
-            } else if status == "invalid" {
-                return Err(ErrorKind::Msg("Invalid response.".into()).into());
-            }
-
-            use std::thread::sleep;
-            use std::time::Duration;
-            sleep(Duration::from_secs(2));
-        }
-    }
-}
 
 #[derive(Clone,Debug, Serialize, Deserialize)]
 pub struct CreateOrderResponse {
@@ -369,10 +237,21 @@ pub struct CreateOrderResponse {
     pub challenges: Vec<Challenge>,
     pub domains: Vec<String>
 }
+
+impl CreateOrderResponse {
+    pub fn get_dns_challenges(&self) -> Vec<Challenge> {
+        self.challenges.iter()
+            .cloned()
+            .filter(|p| p.ctype == "dns-01")
+            .collect()
+    }
+}
+
 #[derive(Clone,Debug, Serialize)]
 pub struct NewOrderRequest {
     identifiers: Vec<Identifier>
 }
+
 #[derive(Clone,Debug, Deserialize)]
 pub struct NewOrderResponse {
     status: String,
@@ -432,10 +311,9 @@ impl Account {
     ///
     /// You can additionally use your own private key and CSR.
     /// See [`CertificateSigner`](struct.CertificateSigner.html) for details.
-    pub fn certificate_signer<'a>(&'a self, domains: &'a [&'a str]) -> CertificateSigner<'a> {
+    pub fn certificate_signer<'a>(&'a self) -> CertificateSigner<'a> {
         CertificateSigner {
             account: self,
-            domains: domains,
             pkey: None,
             csr: None,
         }
@@ -491,17 +369,15 @@ impl Account {
 fn test_order() {
     let _ = env_logger::init();
     let mut account = jwt::tests::test_acc().unwrap();
-    let order = account.create_order("test.autobuild.cloud").unwrap();
-    let domain = "test.autobuild.cloud";
-    let domains = &[domain];
-    
+    let order = account.create_order("test.shangrila.dev").unwrap();
+
     for chal in order.challenges.clone() {
         if chal.ctype == "dns-01" {
             chal.validate(&account).unwrap();
         }
     }
 
-    let signer = account.certificate_signer(domains);
+    let signer = account.certificate_signer();
 
     signer.sign_certificate(&order).unwrap().save_signed_certificate("tests/cert.pem")
         .unwrap();

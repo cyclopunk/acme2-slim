@@ -2,7 +2,7 @@
 # It is not intended for manual editing.
 [[package]]
 name = "acme2-slim"
-version = "0.1.11"
+version = "0.1.2"
 dependencies = [
  "base64 0.13.0",
  "env_logger",

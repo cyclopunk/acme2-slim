@@ -19,6 +19,9 @@ use serde::{Serialize, Deserialize};
 use crate::error::{Result};
 
 
+/// JwsHeader that is required for ACME2 
+/// kid is passed after an account is created / looked up
+/// jwk is passed for authorization
 #[derive(Serialize, Deserialize, Clone, Default)]
 pub(crate) struct JwsHeader {
     nonce: String,
@@ -50,6 +53,8 @@ impl Jwk {
 
 #[derive(Serialize, Deserialize, Clone, Default)]
 pub(crate) struct Jws <T> where T : Serialize {
+    #[serde(skip)]
+    pub(crate) pkey: Option<PKey<openssl::pkey::Private>>,
     pub(crate) url: String,
     pub(crate) header: JwsHeader,
     pub(crate) payload: T
@@ -63,22 +68,18 @@ struct EncodedJws {
 }
 
 impl <T> Jws <T> where T : Serialize {
-    pub(crate) fn serialize(&self, account: &Account) -> Result<String> {
-        let _nonce = account.directory.get_nonce()?;
-
-        //data.insert("header".to_owned(), to_value(&header)?);
-
-        // payload: b64 of payload
+    pub(crate) fn to_string(&self) -> Result<String> {
+        let pkey = self.pkey.as_ref().unwrap();
         let payload = to_string(&self.payload)?;
 
-        //println!("Payload: {}", payload);
+        // a blank string is passed for some of the requests, which to_string turns into literally "" 
         let payload64 = if payload == "\"\"" {"".into()} else { b64(&payload.into_bytes()) };
 
         let protected64 = b64(&to_string(&self.header)?.into_bytes());
 
         // signature: b64 of hash of signature of {proctected64}.{payload64}
         let signature64 = {
-            let mut signer = Signer::new(MessageDigest::sha256(), &account.pkey)?;
+            let mut signer = Signer::new(MessageDigest::sha256(), pkey)?;
             signer
                 .update(&format!("{}.{}", protected64, payload64).into_bytes())?;
             b64(&signer.sign_to_vec()?)
@@ -105,6 +106,7 @@ impl <T> Jws <T> where T : Serialize {
         }   
 
         Ok(Jws {
+            pkey: Some(account.pkey.clone()),
             header,
             payload,
             url: url.into()            
@@ -138,7 +140,7 @@ use crate::error::*;
 
         let dir = Directory::from_url(LETSENCRYPT_STAGING_DIRECTORY_URL).unwrap();
         
-        assert_eq!(dir.resources.newAccount, "https://acme-staging-v02.api.letsencrypt.org/acme/new-acct");
+        assert_eq!(dir.resources.new_account, "https://acme-staging-v02.api.letsencrypt.org/acme/new-acct");
 
         assert!(!dir.get_nonce().unwrap().is_empty());
 
@@ -147,7 +149,7 @@ use crate::error::*;
             .pkey(pkey)
             .register()?;
 
-        assert!(Jws::new(&account.directory.resources.newAccount,&account, "").is_ok());
+        assert!(Jws::new(&account.directory.resources.new_account,&account, "").is_ok());
         Ok(())
     }
 }
