@@ -1,5 +1,3 @@
-use hyper::client::Request;
-use crate::LETSENCRYPT_INTERMEDIATE_CERT_URL;
 use std::io::Write;
 use crate::FinalizeResponse;
 use reqwest::{header::ContentType, Response};
@@ -8,7 +6,7 @@ use openssl::x509::X509;
 use crate::{CreateOrderResponse, jwt::Jws};
 use std::path::Path;
 use openssl::{pkey::PKey, x509::X509Req};
-use log::{debug, info};
+use log::{info};
 use std::{fs::File, io::Read};
 
 use serde_json::from_str;

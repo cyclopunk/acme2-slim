@@ -5,7 +5,7 @@ use crate::Account;
 use crate::File;
 use crate::Path;
 use crate::Identifier;
-use std::io::Read;
+use std::io::{Write, Read};
 
 use openssl::hash::{hash, MessageDigest};
 use crate::helper::*;
@@ -58,8 +58,8 @@ impl Challenge {
         debug!("Saving validation token into: {:?}", &path);
         create_dir_all(&path)?;
 
-        let _file = File::create(path.join(&self.token))?;
-        //writeln!(&mut file, "{}", self.key_authorization)?;
+        let mut file = File::create(path.join(&self.token))?;
+        writeln!(&mut file, "{}", self.key_authorization)?;
 
         Ok(())
     }
@@ -148,7 +148,6 @@ impl Challenge {
 
 impl From<Response> for Challenge {
     fn from(mut response: Response) -> Self {
-        let mut res_content = String::new();
         response.json().unwrap()
     }
 }

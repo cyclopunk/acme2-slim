@@ -8,7 +8,7 @@ use crate::hyperx::ReplayNonce;
 use crate::helper::get_raw;
 use jwt::{Jwk, Jws};
 use helper::*;
-use log::{debug, info};
+use log::{info};
 
 use register::AccountRegistration;
 use reqwest::header::Location;
@@ -23,15 +23,14 @@ use openssl::hash::{hash, MessageDigest};
 use openssl::pkey::PKey;
 use openssl::x509::{X509};
 
-use reqwest::{Client, StatusCode};
+use reqwest::{Client};
 use serde_json::{Value, to_string};
 use serde::{Serialize, Deserialize};
-use error::{Result, ErrorKind};
+use error::{Result};
 
 mod jwt;
 mod cert;
 mod register;
-mod validate;
 mod helper;
 mod error;
 mod challenge;
