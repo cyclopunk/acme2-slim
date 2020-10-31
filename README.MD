@@ -14,8 +14,8 @@ git clone https://github.com/microsoft/vcpkg
 cd vcpkg
 ./bootstrap-vcpkg.sh
 ./vcpkg.exe install openssl
-./vcpkg.exe install openssl:x86-windows-static
-# Add OPENSSL_DIR=/vcpkg/path/installed/x86-windows-static
+./vcpkg.exe install openssl:x64-windows-static
+# Add OPENSSL_DIR=/vcpkg/path/installed/x64-windows-static
 cargo build
 ```
 

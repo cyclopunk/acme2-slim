@@ -263,25 +263,29 @@ pub struct NewOrderResponse {
 
 impl Account {
     /// Creates a new identifier authorization object for domain
-    pub fn create_order<'a>(&'a mut self, domain: &str) -> Result<CreateOrderResponse> {
-        info!("Sending identifier authorization request for {}", domain);
+    pub fn create_order<'a>(&'a mut self, domains: &[&str]) -> Result<CreateOrderResponse> {
+        info!("Sending identifier authorization request for {:?}", domains.to_vec());
 
         let mut challenges: Vec<Challenge> = Vec::new();
 
         let req = NewOrderRequest {
-            identifiers: vec![Identifier {
-                itype:"dns".to_string(),
-                value:domain.clone().to_string()
-            }]
+            identifiers: {
+                domains.iter().map(|i| {
+                    Identifier {
+                        itype: "dns".to_string(),
+                        value: i.to_string()
+                    }
+                }).collect()
+            }
         };
         let directory = self.directory().clone();
         
         let new_order: NewOrderResponse = directory
             .request(self, &directory.resources.new_order, req)?;
                 
-        for auth in new_order.authorizations {                 
+        for auth_url in new_order.authorizations {                 
             let mut resp: CheckResponse = directory
-                .request(self, &auth,  "")?;
+                .request(self, &auth_url,  "")?;
                 
             for challenge in resp.challenges.iter_mut() {
                 let key_authorization = format!("{}.{}",
@@ -290,7 +294,7 @@ impl Account {
                            &to_string(&Jwk::new(self.pkey()))?
                                     .into_bytes())?));
                 challenge.key_authorization = key_authorization.clone();
-                challenge.auth = Some(auth.clone());
+                challenge.domain = Some(resp.identifier.value.clone());
                 challenges.push(challenge.clone());
             }
 
@@ -300,7 +304,7 @@ impl Account {
         Ok(CreateOrderResponse {
             finalize_url: new_order.finalize,
             challenges: challenges,
-            domains:vec![domain.to_string()]
+            domains:domains.iter().map(|s| String::from(*s)).collect()
         })
     }       
 
@@ -369,12 +373,14 @@ impl Account {
 fn test_order() {
     let _ = env_logger::init();
     let mut account = jwt::tests::test_acc().unwrap();
-    let order = account.create_order("test.shangrila.dev").unwrap();
+    let order = account
+        .create_order(&vec!["test.shangrila.dev"])
+        .unwrap();
 
-    for chal in order.challenges.clone() {
-        if chal.ctype == "dns-01" {
-            chal.validate(&account).unwrap();
-        }
+    for chal in order.get_dns_challenges() {
+        println!("Add {} to .acme-challenge.{}", chal.signature().unwrap(), &chal.domain.as_ref().unwrap());
+        
+        chal.validate(&account).unwrap();
     }
 
     let signer = account.certificate_signer();

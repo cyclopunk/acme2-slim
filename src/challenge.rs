@@ -19,7 +19,7 @@ use serde::{Serialize, Deserialize};
 /// A verification challenge.
 pub struct Challenge {
     #[serde(skip)]
-    pub(crate) auth : Option<String>,
+    pub(crate) domain : Option<String>,
     /// Type of verification challenge. Usually `http-01`, `dns-01` for letsencrypt.
     #[serde(rename = "type")]
     pub(crate) ctype: String,

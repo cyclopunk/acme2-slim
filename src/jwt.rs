@@ -130,7 +130,6 @@ use crate::error::*;
     pub fn test_acc() -> Result<Account> {
         Directory::from_url(LETSENCRYPT_STAGING_DIRECTORY_URL)?
             .account_registration()
-            .pkey_from_file("tests/private.key").unwrap()
             .register()
     }
 
