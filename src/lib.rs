@@ -29,7 +29,7 @@ use serde::{Serialize, Deserialize};
 use error::{Result};
 
 mod jwt;
-mod cert;
+pub mod cert;
 mod register;
 mod helper;
 mod error;
