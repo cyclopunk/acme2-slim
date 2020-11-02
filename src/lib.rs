@@ -1,6 +1,8 @@
 #[macro_use]
 extern crate error_chain;
 
+use core::fmt::Display;
+use core::fmt::Debug;
 use crate::challenge::CheckResponse;
 use crate::challenge::Challenge;
 use crate::cert::CertificateSigner;
@@ -262,7 +264,7 @@ pub struct NewOrderResponse {
 
 impl Account {
     /// Creates a new identifier authorization object for domain
-    pub fn create_order<'a>(&'a mut self, domains: &[&str]) -> Result<CreateOrderResponse> {
+    pub fn create_order<'a, T: AsRef<str> + Debug + Clone + Display>(&'a mut self, domains: &[T]) -> Result<CreateOrderResponse> {
         info!("Sending identifier authorization request for {:?}", domains.to_vec());
 
         let mut challenges: Vec<Challenge> = Vec::new();
@@ -303,7 +305,7 @@ impl Account {
         Ok(CreateOrderResponse {
             finalize_url: new_order.finalize,
             challenges: challenges,
-            domains:domains.iter().map(|s| String::from(*s)).collect()
+            domains:domains.iter().map(|s| s.to_string()).collect()
         })
     }       
 
