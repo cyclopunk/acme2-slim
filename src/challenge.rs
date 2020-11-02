@@ -74,6 +74,10 @@ impl Challenge {
         
     }
 
+    pub fn domain(&self) -> Option<String> {
+        self.domain.clone()
+    }
+
     /// Returns challenge type, usually `http-01` or `dns-01` for Let's Encrypt.
     pub fn ctype(&self) -> &str {
         &self.ctype
