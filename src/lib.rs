@@ -36,9 +36,9 @@ mod helper;
 mod jwt;
 mod register;
 
-pub const LETSENCRYPT_DIRECTORY_URL: &'static str = "https://acme-v02.api.letsencrypt.org\
+pub const LETSENCRYPT_DIRECTORY_URL: &str = "https://acme-v02.api.letsencrypt.org\
                                                      /directory";
-pub const LETSENCRYPT_AGREEMENT_URL: &'static str = "https://letsencrypt.org/documents/LE-SA-v1.2-\
+pub const LETSENCRYPT_AGREEMENT_URL: &str = "https://letsencrypt.org/documents/LE-SA-v1.2-\
                                                      November-15-2017.pdf";
 /// Default Let's Encrypt intermediate certificate URL to chain when needed.
 pub const LETSENCRYPT_INTERMEDIATE_CERT_URL: &'static str = "https://letsencrypt.org/certs/\
@@ -310,7 +310,7 @@ impl Account {
 
         Ok(CreateOrderResponse {
             finalize_url: new_order.finalize,
-            challenges: challenges,
+            challenges,
             domains: domains.iter().map(|s| s.to_string()).collect(),
         })
     }
