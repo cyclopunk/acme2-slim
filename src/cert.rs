@@ -7,7 +7,6 @@ use openssl::{pkey::PKey, x509::X509Req};
 use reqwest::Client;
 use reqwest::{header::CONTENT_TYPE, Response};
 use serde::{Deserialize, Serialize};
-use serde_json::from_str;
 use std::path::Path;
 use std::pin::Pin;
 use tokio::fs;
@@ -107,8 +106,7 @@ impl<'a> CertificateSigner<'a> {
 
 impl FinalizeResponse {
     async fn from_response(res: Response) -> Result<Self> {
-        let res_content = res.text().await?;
-        Ok(from_str(&res_content)?)
+        Ok(res.json().await?)
     }
 
     async fn get_certificates(&self, account: &Account) -> Result<Vec<X509>> {

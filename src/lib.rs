@@ -190,8 +190,6 @@ impl Directory {
 
         let maybe_loc = res.headers().get(LOCATION).cloned();
 
-        let res_content = res.text().await?;
-
         if let Some(loc) = maybe_loc {
             if account.pkey_id.is_none() {
                 // TODO(lucacasonato): handle this error
@@ -199,7 +197,7 @@ impl Directory {
             }
         }
 
-        Ok(serde_json::from_str(&res_content)?)
+        Ok(res.json().await?)
     }
 }
 
