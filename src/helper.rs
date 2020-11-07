@@ -1,27 +1,13 @@
-use reqwest::Client;
 use std::path::Path;
-use std::fs::File;
-use std::io::Read;
+use tokio::fs;
 
-use openssl::{pkey::PKey, rsa::Rsa};
-use openssl::x509::{X509Req, X509Name};
-use openssl::x509::extension::SubjectAlternativeName;
-use openssl::stack::Stack;
 use openssl::hash::MessageDigest;
+use openssl::stack::Stack;
+use openssl::x509::extension::SubjectAlternativeName;
+use openssl::x509::{X509Name, X509Req};
+use openssl::{pkey::PKey, rsa::Rsa};
 
-use crate::error::{Result};
-
-pub(crate) fn get_raw(url : &str) -> Result<String> {
-    let client = Client::new()?;
-    
-    let mut res = client.get(url).send()?;
-    
-    let mut content = String::new();
-
-    res.read_to_string(&mut content)?;
-
-    Ok(content)
-}
+use crate::error::Result;
 
 /// Generates new PKey.
 pub(crate) fn gen_key() -> Result<PKey<openssl::pkey::Private>> {
@@ -30,23 +16,17 @@ pub(crate) fn gen_key() -> Result<PKey<openssl::pkey::Private>> {
     Ok(key)
 }
 
-
 /// base64 Encoding with URL and Filename Safe Alphabet.
 pub(crate) fn b64(data: &[u8]) -> String {
     ::base64::encode_config(data, ::base64::URL_SAFE_NO_PAD)
 }
 
-
 /// Reads PKey from Path.
-pub(crate) fn read_pkey<P: AsRef<Path>>(path: P) -> Result<PKey<openssl::pkey::Private>> {
-    let mut file = File::open(path)?;
-    let mut content = Vec::new();
-    file.read_to_end(&mut content)?;
+pub(crate) async fn read_pkey<P: AsRef<Path>>(path: P) -> Result<PKey<openssl::pkey::Private>> {
+    let content = fs::read(path).await?;
     let key = PKey::private_key_from_pem(&content)?;
     Ok(key)
 }
-
-
 
 /// Generates X509Req (CSR) from domain names.
 ///

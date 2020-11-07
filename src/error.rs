@@ -1,4 +1,3 @@
-
 error_chain! {
     types {
         Error, ErrorKind, ChainErr, Result;
@@ -22,7 +21,6 @@ error_chain! {
         }
     }
 }
-
 
 fn acme_server_error_description(resp: &serde_json::Value) -> String {
     if let Some(obj) = resp.as_object() {

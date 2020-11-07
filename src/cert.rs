@@ -1,20 +1,22 @@
-use std::io::Write;
 use crate::FinalizeResponse;
-use reqwest::{header::ContentType, Response};
-use reqwest::Client;
+use crate::{error::Result, helper::*, Account};
+use crate::{jwt::Jws, CreateOrderResponse};
+use log::info;
 use openssl::x509::X509;
-use crate::{CreateOrderResponse, jwt::Jws};
-use std::path::Path;
 use openssl::{pkey::PKey, x509::X509Req};
-use log::{info};
-use std::{fs::File, io::Read};
-
+use reqwest::Client;
+use reqwest::{header::CONTENT_TYPE, Response};
+use serde::{Deserialize, Serialize};
 use serde_json::from_str;
-use crate::{Account, error::{Result}, helper::*};
-use serde::{Serialize, Deserialize};
+use std::path::Path;
+use std::pin::Pin;
+use tokio::fs;
+use tokio::io::AsyncWrite;
+use tokio::io::AsyncWriteExt;
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct CsrRequest {
-    csr: String
+    csr: String,
 }
 
 /// A signed certificate.
@@ -23,7 +25,6 @@ pub struct SignedCertificate {
     csr: X509Req,
     pkey: PKey<openssl::pkey::Private>,
 }
-  
 
 pub struct CertificateSigner<'a> {
     pub(crate) account: &'a Account,
@@ -39,8 +40,11 @@ impl<'a> CertificateSigner<'a> {
     }
 
     /// Load PEM formatted PKey from file
-    pub fn pkey_from_file<P: AsRef<Path>>(mut self, path: P) -> Result<CertificateSigner<'a>> {
-        self.pkey = Some(read_pkey(path)?);
+    pub async fn pkey_from_file<P: AsRef<Path>>(
+        mut self,
+        path: P,
+    ) -> Result<CertificateSigner<'a>> {
+        self.pkey = Some(read_pkey(path).await?);
         Ok(self)
     }
 
@@ -51,71 +55,77 @@ impl<'a> CertificateSigner<'a> {
     }
 
     /// Load PKey and CSR from file
-    pub fn csr_from_file<P: AsRef<Path>>(mut self,
-                                         pkey_path: P,
-                                         csr_path: P)
-                                         -> Result<CertificateSigner<'a>> {
-        self.pkey = Some(read_pkey(pkey_path)?);
+    pub async fn csr_from_file<P: AsRef<Path>>(
+        mut self,
+        pkey_path: P,
+        csr_path: P,
+    ) -> Result<CertificateSigner<'a>> {
+        self.pkey = Some(read_pkey(pkey_path).await?);
         let content = {
-            let mut file = File::open(csr_path)?;
-            let mut content = Vec::new();
-            file.read_to_end(&mut content)?;
+            let content = fs::read(csr_path).await?;
             content
         };
         self.csr = Some(X509Req::from_pem(&content)?);
         Ok(self)
     }
 
-
     /// Signs certificate.
     ///
     /// CSR and PKey will be generated if it doesn't set or loaded first.
-    pub fn sign_certificate(self, order : &CreateOrderResponse) -> Result<SignedCertificate> {
+    pub async fn sign_certificate(self, order: &CreateOrderResponse) -> Result<SignedCertificate> {
         info!("Signing certificate");
         let domains: Vec<&str> = order.domains.iter().map(|s| &s[..]).collect();
-        
-        let s_key = gen_key().unwrap();
-        let csr = gen_csr(&s_key, &domains)?;
-        let payload = &csr.to_der()?;
-        
-        let csr_payload = CsrRequest{ 
-            csr: b64(payload)
-        };
 
-        let client = Client::new().unwrap();
-        
+        let pkey = gen_key()?;
+        let csr = gen_csr(&pkey, &domains)?;
+        let payload = &csr.to_der()?;
+
+        let csr_payload = CsrRequest { csr: b64(payload) };
+
+        let client = Client::new();
+
+        let jws = Jws::new(&order.finalize_url, &self.account, csr_payload)
+            .await?
+            .to_string()?;
+
         let resp = client
             .post(&order.finalize_url)
-            .header(ContentType("application/jose+json".parse().unwrap()))
-            .body({                        
-                Jws::new(&order.finalize_url,&self.account, csr_payload)?.to_string()?
-            })
-            .send()?;
-        
-        let finalize_response : FinalizeResponse = resp.into();
-    
+            .header(CONTENT_TYPE, "application/jose+json")
+            .body(jws)
+            .send()
+            .await?;
+
+        let finalize_response = FinalizeResponse::from_response(resp).await?;
+
         Ok(SignedCertificate {
-               certs: finalize_response.get_certificates(&self.account)?,
-               csr: csr,
-               pkey: s_key,
-           })
+            certs: finalize_response.get_certificates(&self.account).await?,
+            csr,
+            pkey,
+        })
     }
 }
 
 impl FinalizeResponse {
-    fn get_certificates(&self, account : &Account) -> Result<Vec<X509>> {
-        let client = Client::new()?;
+    async fn from_response(res: Response) -> Result<Self> {
+        let res_content = res.text().await?;
+        Ok(from_str(&res_content)?)
+    }
 
-        let mut cert_resp = client
+    async fn get_certificates(&self, account: &Account) -> Result<Vec<X509>> {
+        let client = Client::new();
+
+        let jws = Jws::new(&self.certificate, &account, "")
+            .await?
+            .to_string()?;
+
+        let cert_resp = client
             .post(&self.certificate)
-            .header(ContentType("application/jose+json".parse().unwrap()))
-            .body(                    
-                Jws::new(&self.certificate, &account, "")?.to_string()?)
-            .send().unwrap();
+            .header(CONTENT_TYPE, "application/jose+json")
+            .body(jws)
+            .send()
+            .await?;
 
-        let mut crt_der = String::new();
-
-        cert_resp.read_to_string(&mut crt_der)?;        
+        let crt_der = cert_resp.text().await?;
 
         let cert = X509::stack_from_pem(&crt_der.as_bytes())?;
 
@@ -123,50 +133,48 @@ impl FinalizeResponse {
     }
 }
 
-
-impl Into<FinalizeResponse> for Response {
-    fn into(mut self) -> FinalizeResponse { 
-        let mut res_content = String::new();
-        self.read_to_string(&mut res_content).unwrap();
-        from_str(&res_content).unwrap()
-    }
-}
-
 impl SignedCertificate {
     /// Saves signed certificate to a file
-    pub fn save_signed_certificate<P: AsRef<Path>>(&self, path: P) -> Result<()> {
-        let mut file = File::create(path)?;
-        self.write_signed_certificate(&mut file)
+    pub async fn save_signed_certificate<P: AsRef<Path>>(&self, path: P) -> Result<()> {
+        let mut file = fs::File::create(path).await?;
+        self.write_signed_certificate(Pin::new(&mut file)).await
     }
 
     /// Saves private key used to sign certificate to a file
-    pub fn save_private_key<P: AsRef<Path>>(&self, path: P) -> Result<()> {
-        let mut file = File::create(path)?;
-        self.write_private_key(&mut file)
+    pub async fn save_private_key<P: AsRef<Path>>(&self, path: P) -> Result<()> {
+        let mut file = fs::File::create(path).await?;
+        self.write_private_key(Pin::new(&mut file)).await
     }
 
     /// Saves CSR used to sign certificateto to a file
-    pub fn save_csr<P: AsRef<Path>>(&self, path: P) -> Result<()> {
-        let mut file = File::create(path)?;
-        self.write_csr(&mut file)
+    pub async fn save_csr<P: AsRef<Path>>(&self, path: P) -> Result<()> {
+        let mut file = fs::File::create(path).await?;
+        self.write_csr(Pin::new(&mut file)).await
     }
 
     /// Writes signed certificate to writer.
-    pub fn write_signed_certificate<W: Write>(&self, writer: &mut W) -> Result<()> {
+    pub async fn write_signed_certificate<W: AsyncWrite>(
+        &self,
+        mut writer: Pin<&mut W>,
+    ) -> Result<()> {
         for cert in self.cert() {
-            writer.write_all(&cert.to_pem()?)?;
+            writer.write_all(&cert.to_pem()?).await?;
         }
         Ok(())
     }
 
     /// Writes private key used to sign certificate to a writer
-    pub fn write_private_key<W: Write>(&self, writer: &mut W) -> Result<()> {
-        Ok(writer.write_all(&self.pkey().private_key_to_pem_pkcs8()?)?)
+    pub async fn write_private_key<W: AsyncWrite>(&self, mut writer: Pin<&mut W>) -> Result<()> {
+        writer
+            .write_all(&self.pkey().private_key_to_pem_pkcs8()?)
+            .await?;
+        Ok(())
     }
 
     /// Writes CSR used to sign certificateto a writer
-    pub fn write_csr<W: Write>(&self, writer: &mut W) -> Result<()> {
-        Ok(writer.write_all(&self.csr().to_pem()?)?)
+    pub async fn write_csr<W: AsyncWrite>(&self, mut writer: Pin<&mut W>) -> Result<()> {
+        writer.write_all(&self.csr().to_pem()?).await?;
+        Ok(())
     }
 
     /// Returns reference to certificate
