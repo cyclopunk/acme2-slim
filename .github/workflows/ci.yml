@@ -23,8 +23,10 @@ jobs:
           rustup component add clippy
           rustup component add rustfmt
       - name: Format
+        run: |
           cargo fmt -- --check
       - name: Lint
+        run: |
           cargo clippy --all-targets --locked --release -- -D clippy::all
       - name: Build
         run: cargo build --verbose
