@@ -1,13 +1,12 @@
 use std::{collections::HashMap, path::Path};
 
-
 use log::info;
 use openssl::pkey::PKey;
 
-use crate::{Account, Directory};
+use crate::error::Result;
 use crate::helper::*;
-use crate::error::{Result};
-use serde::{Deserialize,Serialize};
+use crate::{Account, Directory};
+use serde::{Deserialize, Serialize};
 pub struct AccountRegistration {
     pub directory: Directory,
     pub pkey: Option<PKey<openssl::pkey::Private>>,
@@ -16,12 +15,12 @@ pub struct AccountRegistration {
     pub agreement: Option<String>,
 }
 
-#[derive(Serialize,Clone, Default)]
+#[derive(Serialize, Clone, Default)]
 #[serde(rename_all = "camelCase")]
 struct RegisterRequest {
-    pub terms_of_service_agreed: bool
+    pub terms_of_service_agreed: bool,
 }
-#[derive(Deserialize,Clone)]
+#[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct RegisterResult {
     contact: Vec<String>,
@@ -29,7 +28,7 @@ struct RegisterResult {
     created_at: String,
     status: String,
     #[serde(flatten)]
-    key: HashMap<String,serde_json::Value>
+    key: HashMap<String, serde_json::Value>,
 }
 
 impl Default for RegisterResult {
@@ -39,7 +38,7 @@ impl Default for RegisterResult {
             initial_ip: String::default(),
             created_at: String::default(),
             status: String::default(),
-            key: HashMap::default()
+            key: HashMap::default(),
         }
     }
 }
@@ -71,30 +70,37 @@ impl AccountRegistration {
     }
 
     /// Sets PKey from a PEM formatted file.
-    pub fn pkey_from_file<P: AsRef<Path>>(mut self, path: P) -> Result<AccountRegistration> {
-        self.pkey = Some(read_pkey(path)?);
+    pub async fn pkey_from_file<P: AsRef<Path>>(mut self, path: P) -> Result<AccountRegistration> {
+        self.pkey = Some(read_pkey(path).await?);
         Ok(self)
     }
-
 
     /// Registers an account.
     ///
     /// A PKey will be generated if it doesn't exists.
-    pub fn register(self) -> Result<Account> {
+    pub async fn register(self) -> Result<Account> {
         info!("Registering account");
 
         let pkey = self.pkey.unwrap_or(gen_key()?);
 
         let mut account = Account {
             directory: self.directory.clone(),
-            pkey_id: None, 
-            pkey: pkey,
+            pkey_id: None,
+            pkey,
         };
 
         let url = &self.directory.resources.new_account.clone();
 
-        let _result : RegisterResult  = self.directory.request(&mut account, &url, 
-             RegisterRequest{terms_of_service_agreed: true})?;
+        let _result: RegisterResult = self
+            .directory
+            .request(
+                &mut account,
+                &url,
+                RegisterRequest {
+                    terms_of_service_agreed: true,
+                },
+            )
+            .await?;
 
         Ok(account)
     }
