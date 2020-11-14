@@ -22,32 +22,37 @@ cargo build
 ## Quickstart
 
 ```
-fn main() -> Result<()> {
-    let dir = Directory::lets_encrypt()?;
+#[tokio::main]
+async fn main() -> Result<()> {
+    let dir = Directory::lets_encrypt()
+        .await?;
 
     let account = dir.account_registration()
         .pkey_from_file(path) // optional, you can provide one with pkey(), or leave this blank to create a new pkey.
-        .register()?;
+        .register()
+        .await?;
 
 
     let domain = "yourdomain.com";
     let domains = &[domain];
     
     let order = account
-        .create_order(&domain).unwrap();
+        .create_order(&domain)
+        .await
+        .expect("create order");
 
     for chal in order.get_http_challenges() {
         chal.serve_challenge(Duration::from_seconds(30)); // create a temp webserver on port 80 for 30 seconds
-        chal.validate(&account).unwrap();    
+        chal.validate(&account).await.expect("to validate");    
     }
     // use order.get_dns_challanges to do dns.
 
     let signer = account.certificate_signer(&domains);
 
-    let cert = signer.sign_certificate(&order).unwrap();
+    let cert = signer.sign_certificate(&order).await.expect("to sign certificate");
 
-    cert.save_signed_certificate(format!("certs/{}.pem", domain_name))?;
-    cert.save_private_key(format!("certs/{}.key", domain_name))?;
+    cert.save_signed_certificate(format!("certs/{}.pem", domain_name)).await?;
+    cert.save_private_key(format!("certs/{}.key", domain_name)).await?;
 }
 ```
 
