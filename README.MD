@@ -26,7 +26,7 @@ fn main() -> Result<()> {
     let dir = Directory::lets_encrypt()?;
 
     let account = dir.account_registration()
-        .pkey_from_file(path) // optional, will create a key or provide one with pkey()
+        .pkey_from_file(path) // optional, you can provide one with pkey(), or leave this blank to create a new pkey.
         .register()?;
 
 
@@ -36,11 +36,11 @@ fn main() -> Result<()> {
     let order = account
         .create_order(&domain).unwrap();
 
-    for chal in order.challenges.clone() {
-        if chal.ctype == "dns-01" {
-            chal.validate(&account).unwrap();
-        }
+    for chal in order.get_http_challenges() {
+        chal.serve_challenge(Duration::from_seconds(30)); // create a temp webserver on port 80 for 30 seconds
+        chal.validate(&account).unwrap();    
     }
+    // use order.get_dns_challanges to do dns.
 
     let signer = account.certificate_signer(&domains);
 
@@ -53,11 +53,12 @@ fn main() -> Result<()> {
 
 ## TODO
 
-- Implement all certificate management features 
-- Better ergonomics
-- More logging
-- Housecleaning
-- Async support
-- Update libraries
+- Cert Revocation
+- Key change
 - Examples
 
+# Contributors 
+
+Thanks to people who are contributing to this effort: 
+
+- @lucacasonato

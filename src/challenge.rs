@@ -6,15 +6,16 @@ use crate::{jwt::Jws, CONTENT_TYPE};
 use std::time::Duration;
 
 use crate::helper::*;
-use log::debug;
+use log::{debug, info, warn};
 use openssl::hash::{hash, MessageDigest};
 use reqwest::StatusCode;
-use tokio::fs;
+use tokio::{fs, sync::oneshot};
+use warp::Filter;
 
 use crate::error::{ErrorKind, Result};
 use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Clone, Default)]
 /// A verification challenge.
 pub struct Challenge {
     #[serde(skip)]
@@ -54,12 +55,53 @@ impl Challenge {
     pub async fn save_key_authorization<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         use tokio::fs::create_dir_all;
         let path = path.as_ref().join(".well-known").join("acme-challenge");
+        
         debug!("Saving validation token into: {:?}", &path);
+        
         create_dir_all(&path).await?;
 
         fs::write(path.join(&self.token), self.key_authorization.as_bytes()).await?;
 
         Ok(())
+    }
+    
+
+    pub fn serve_challenge(&self, timeout: Duration) {
+        let (tx, rx) = oneshot::channel::<()>();
+
+        let key_authorization = self.key_authorization.clone();
+        let token = self.token().to_string().clone();
+
+        let filter = warp::path!(".well-known" / "acme-challenge" / String )     
+        .map( move |t| {
+            if t != token {
+                warn!("Got an invalid token from valiation : {}", t);
+                return Ok("Invalid Token".to_string());
+            }
+            //let x = tx.clone();
+            
+            info!("Sending authorization to validation attempt");
+
+            Ok(key_authorization.clone())
+        });
+
+        let server = warp::serve(filter);                        
+
+        let (_, srv) = server.bind_with_graceful_shutdown(
+            ([0,0,0,0], 80),
+            async move {
+                rx.await.ok();
+            },
+        );
+
+        // wait 30 seconds for the challenge
+        tokio::spawn( async move {
+            info!("Spawning webserver for {:?} seconds",timeout);
+            tokio::time::delay_for(timeout).await; 
+            tx.send(()).unwrap();                        
+        });
+
+        tokio::spawn(srv);
     }
 
     /// Gets DNS validation signature.
@@ -147,5 +189,25 @@ impl Challenge {
 
             tokio::time::delay_for(poll_interval).await
         }
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::{Directory, jwt::tests::test_acc};
+    use super::*;
+    #[tokio::test(threaded_scheduler)]
+    #[ignore]
+    async fn test_challenge_server() {
+        let account =test_acc().await.expect("Get a test account.");
+        
+        let challenge = Challenge {
+            token:"test".into(),
+            key_authorization:"test2".into(),
+            ..Default::default()
+        };
+
+        challenge.serve_challenge(Duration::from_secs(30));
+        challenge.validate(&account, Duration::from_secs(5)).await.unwrap();
     }
 }

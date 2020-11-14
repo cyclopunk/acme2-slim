@@ -244,6 +244,13 @@ impl CreateOrderResponse {
             .filter(|p| p.ctype == "dns-01")
             .collect()
     }
+    pub fn get_http_challenges(&self) -> Vec<Challenge> {
+        self.challenges
+            .iter()
+            .cloned()
+            .filter(|p| p.ctype == "http-01")
+            .collect()
+    }
 }
 
 #[derive(Clone, Debug, Serialize)]
