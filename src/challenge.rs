@@ -97,7 +97,7 @@ impl Challenge {
         // wait 30 seconds for the challenge
         tokio::spawn( async move {
             info!("Spawning webserver for {:?} seconds",timeout);
-            tokio::time::delay_for(timeout).await; 
+            tokio::time::sleep(timeout).await; 
             tx.send(()).unwrap();                        
         });
 
@@ -187,7 +187,7 @@ impl Challenge {
                 return Err(ErrorKind::Msg("Invalid response.".into()).into());
             }
 
-            tokio::time::delay_for(poll_interval).await
+            tokio::time::sleep(poll_interval).await
         }
     }
 }
@@ -196,7 +196,7 @@ impl Challenge {
 mod test {
     use crate::{Directory, jwt::tests::test_acc};
     use super::*;
-    #[tokio::test(threaded_scheduler)]
+    #[tokio::test(flavor = "multi_thread")]
     #[ignore]
     async fn test_challenge_server() {
         let account =test_acc().await.expect("Get a test account.");
