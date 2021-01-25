@@ -184,6 +184,8 @@ impl Challenge {
             } else if status == "valid" {
                 return Ok(());
             } else if status == "invalid" {
+                warn!("Invalid status for challenge {:?}", auth);
+                
                 return Err(ErrorKind::Msg("Invalid response.".into()).into());
             }
 
