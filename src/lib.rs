@@ -8,7 +8,7 @@ use core::fmt::Debug;
 use core::fmt::Display;
 use helper::*;
 use jwt::{Jwk, Jws};
-use log::info;
+use log::{debug, info};
 
 use register::AccountRegistration;
 use reqwest::header::CONTENT_TYPE;
@@ -27,7 +27,7 @@ use openssl::x509::X509;
 use error::Result;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
-use serde_json::{to_string, Value};
+use serde_json::{Value, from_str, to_string};
 
 pub mod cert;
 mod challenge;
@@ -197,7 +197,11 @@ impl Directory {
             }
         }
 
-        Ok(res.json().await?)
+        let body = res.text().await?;
+
+        debug!("Response body: {}", body);
+
+        Ok(from_str(&body)?)
     }
 }
 
