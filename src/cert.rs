@@ -75,8 +75,18 @@ impl<'a> CertificateSigner<'a> {
         info!("Signing certificate");
         let domains: Vec<&str> = order.domains.iter().map(|s| &s[..]).collect();
 
-        let pkey = gen_key()?;
-        let csr = gen_csr(&pkey, &domains)?;
+        let pkey = if let Some(pkey) = self.pkey {
+            pkey
+        } else {
+            gen_key()?
+        };
+
+        let csr = if let Some(csr) = self.csr {
+            csr
+        } else {
+            gen_csr(&pkey, &domains)?
+        };
+
         let payload = &csr.to_der()?;
 
         let csr_payload = CsrRequest { csr: b64(payload) };
