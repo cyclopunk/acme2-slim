@@ -9,7 +9,7 @@ This library is a slimmed down version of https://github.com/onur/acme-client in
 To compile on windows you will need openssl, here's an easy way to get it installed.
 
 (example in Git Bash)
-```
+```bash
 git clone https://github.com/microsoft/vcpkg
 cd vcpkg
 ./bootstrap-vcpkg.sh
@@ -21,7 +21,7 @@ cargo build
 
 ## Quickstart
 
-```
+```rust
 #[tokio::main]
 async fn main() -> Result<()> {
     let dir = Directory::lets_encrypt()
