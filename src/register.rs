@@ -23,6 +23,7 @@ struct RegisterRequest {
 #[derive(Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 struct RegisterResult {
+    #[serde(default)]
     contact: Vec<String>,
     initial_ip: String,
     created_at: String,
